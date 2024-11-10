@@ -2,13 +2,11 @@ import discord
 from discord.ext import commands, tasks
 import re
 import os
-from keep_alive import keep_alive
+from keep_alive import keep_alive  # Import the keep_alive function from the keep_alive.py file
 
-# Replace with your bot's token
 TOKEN = os.getenv("DISCORD_TOKEN")
-
 intents = discord.Intents.default()
-intents.message_content = True  # Enables reading message content
+intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -25,6 +23,10 @@ TOTAL_LIMIT = 5
 
 # Regex pattern to detect time mentions in the message
 time_pattern = re.compile(r"\b(will|at|in|around)?\s?(\d{1,2}[:.]\d{2})\b", re.IGNORECASE)
+
+# Set up the designated status channels (you need to provide the channel IDs)
+INPUT_CHANNEL_ID = 123456789012345678  # Replace with your input channel ID (Channel A)
+STATUS_CHANNEL_ID = 987654321098765432  # Replace with your status channel ID (Channel B)
 
 # Functions to check if users can join the queues
 def can_take_break():
@@ -50,33 +52,33 @@ def format_queue(queue_name, queue_list, max_limit):
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
-    send_periodic_status.start()  # Start periodic status updates when the bot is ready
 
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return  # Ignore messages from the bot itself
 
-    content = message.content.lower()  # Convert message content to lowercase for case-insensitive matching
-    user = message.author.display_name  # Use display name instead of username
+    content = message.content.lower()
+    user = message.author.display_name
+
+    # Only respond to commands in the designated input channel (Channel A)
+    if message.channel.id != INPUT_CHANNEL_ID:
+        return
 
     # Check if the message contains a time-related request like "will take a break at 9:45"
     match = time_pattern.search(content)
     if match:
-        time_str = match.group(2)  # Extract the time part (e.g., 9:45)
-        time_slot = time_str.strip()  # Clean the time string (remove any spaces)
+        time_str = match.group(2)
+        time_slot = time_str.strip()
 
         # Store the time slot for the user
         time_slots[user] = time_slot
 
         await message.channel.send(f"Thank you {user}, your time of {time_slot} has been acknowledged. You have been added to the time schedule at that time.")
-
-        # Prevent further processing, don't allow break/adhoc/other queue triggers
         return
 
-    # Check if the message contains "back" or "did not" - prioritizing these keywords first
+    # Check if the message contains "back" or "did not" (prioritize removing user from queues)
     if "back" in content or "did not" in content:
-        # Remove the user from all queues (break, adhoc, offline)
         removed = False
         if user in break_queue:
             break_queue.remove(user)
@@ -89,12 +91,14 @@ async def on_message(message):
             removed = True
 
         if removed:
-            await send_status_change(user, "back")
+            # Send the update in the designated input channel (Channel A)
+            await message.channel.send(f"**{user} has been removed from all queues as they are back or did not take action.**")
+
         else:
             await message.channel.send(f"{user}, you're not in any queue.")
-        return  # Stop further processing to avoid triggering other commands like "break" or "offline"
+        return
 
-    # Check if the message contains other commands (e.g., break, offline, adhoc)
+    # Commands handling
     if "offline" in content:
         if user in break_queue or user in adhoc_queue or user in offline_queue:
             await message.channel.send(f"{user}, you're already in one of the queues. Please leave the current queue before joining another.")
@@ -105,7 +109,11 @@ async def on_message(message):
             if user in adhoc_queue:
                 adhoc_queue.remove(user)
             offline_queue.append(user)
-            await send_status_change(user, "offline")
+            await message.channel.send(f"**{user} is now marked as offline.**")
+
+            # Send the update in the input channel (Channel A)
+            await message.channel.send(f"**{user} is now offline.**")
+            
         else:
             await message.channel.send("Offline limit reached. Please wait for someone to return.")
 
@@ -119,10 +127,10 @@ async def on_message(message):
             if user in adhoc_queue:
                 adhoc_queue.remove(user)
             break_queue.append(user)
-            await send_status_change(user, "break")
+            await message.channel.send(f"**{user} is now on break.**")
         elif can_take_break():
             break_queue.append(user)
-            await send_status_change(user, "break")
+            await message.channel.send(f"**{user} is now on break.**")
         else:
             await message.channel.send("Break limit reached. Please wait for someone to return.")
 
@@ -136,49 +144,32 @@ async def on_message(message):
             if user in offline_queue:
                 offline_queue.remove(user)
             adhoc_queue.append(user)
-            await send_status_change(user, "adhoc")
+            await message.channel.send(f"**{user} is now on ad-hoc work.**")
         elif can_take_adhoc():
             adhoc_queue.append(user)
-            await send_status_change(user, "adhoc")
+            await message.channel.send(f"**{user} is now on ad-hoc work.**")
         else:
             await message.channel.send("Ad-hoc work limit reached. Please wait for someone to return.")
 
-# Function to send a status change message to the designated channel
-async def send_status_change(user, status):
-    channel = bot.get_channel(1283367634712137740)  # Replace with the ID of the channel you want to send updates to
-    if status == "back":
-        await channel.send(f"{user} is back to work!")
-    elif status == "break":
-        await channel.send(f"{user} is on break.")
-    elif status == "adhoc":
-        await channel.send(f"{user} is on ad-hoc work.")
-    elif status == "offline":
-        await channel.send(f"{user} is now offline.")
-    
-    # Trigger the status update in the designated channel after each queue change
-    await send_periodic_status()
-
-# Function for periodic status updates every 30 minutes
+# Task to send periodic updates in the designated status channel (Channel B) every 30 minutes
 @tasks.loop(minutes=30)
 async def send_periodic_status():
-    await update_status_in_channel()
+    # Get the status channel (Channel B)
+    status_channel = bot.get_channel(STATUS_CHANNEL_ID)
 
-# Function to send the current status to a designated channel
-async def update_status_in_channel():
-    channel = bot.get_channel(1305118324547653692)  # Replace with the ID of the channel you want to send updates to
-    total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
-    status_message = (
-        f"**__Current Status__**\n\n"
-        f"**Total Away:** {total_away}/{TOTAL_LIMIT}\n"
-        f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
-        f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
-        f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-    )
-    if total_away >= TOTAL_LIMIT:
-        status_message += "\n🚨 **__TOTAL LIMIT REACHED!__ NO MORE PEOPLE CAN BE AWAY!** 🚨"
-    await channel.send(status_message)
+    status_message = f"**Current Queue Status**\n" \
+                     f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
+                     f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
+                     f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+    
+    await status_channel.send(status_message)
 
-# Start the keep-alive function
-keep_alive()  # Call the keep_alive function to keep the bot alive
+# Start the periodic status updates when the bot is ready
+@bot.event
+async def on_ready():
+    send_periodic_status.start()
+    print(f'Logged in as {bot.user}')
+
 # Run the bot
+keep_alive()
 bot.run(TOKEN)
