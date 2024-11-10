@@ -1,8 +1,8 @@
 import discord
 from discord.ext import commands, tasks
-import re  # Import regex for time matching
-import os  # Importing the os library to access the token
-from keep_alive import keep_alive  # Import the keep_alive function from the keep_alive.py file
+import re
+import os
+from keep_alive import keep_alive
 
 # Replace with your bot's token
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -89,15 +89,10 @@ async def on_message(message):
             removed = True
 
         if removed:
-            await message.channel.send(
-                f"**{user} has been removed from all queues as they are back or did not take action.**\n\n"
-                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
-                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
-                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-            )
+            await update_status_in_channel()
+
         else:
             await message.channel.send(f"{user}, you're not in any queue.")
-
         return  # Stop further processing to avoid triggering other commands like "break" or "offline"
 
     # Check if the message contains other commands (e.g., break, offline, adhoc)
@@ -111,12 +106,7 @@ async def on_message(message):
             if user in adhoc_queue:
                 adhoc_queue.remove(user)
             offline_queue.append(user)
-            await message.channel.send(
-                f"**{user} is now marked as offline.**\n\n"
-                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
-                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
-                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-            )
+            await update_status_in_channel()
         else:
             await message.channel.send("Offline limit reached. Please wait for someone to return.")
 
@@ -130,20 +120,10 @@ async def on_message(message):
             if user in adhoc_queue:
                 adhoc_queue.remove(user)
             break_queue.append(user)
-            await message.channel.send(
-                f"**{user} is now on break.**\n\n"
-                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
-                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
-                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-            )
+            await update_status_in_channel()
         elif can_take_break():
             break_queue.append(user)
-            await message.channel.send(
-                f"**{user} is now on break.**\n\n"
-                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
-                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
-                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-            )
+            await update_status_in_channel()
         else:
             await message.channel.send("Break limit reached. Please wait for someone to return.")
 
@@ -157,44 +137,26 @@ async def on_message(message):
             if user in offline_queue:
                 offline_queue.remove(user)
             adhoc_queue.append(user)
-            await message.channel.send(
-                f"**{user} is now on ad-hoc work.**\n\n"
-                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
-                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
-                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-            )
+            await update_status_in_channel()
         elif can_take_adhoc():
             adhoc_queue.append(user)
-            await message.channel.send(
-                f"**{user} is now on ad-hoc work.**\n\n"
-                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
-                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
-                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-            )
+            await update_status_in_channel()
         else:
             await message.channel.send("Ad-hoc work limit reached. Please wait for someone to return.")
 
-    # Handle "status" command if "back" or "did not" was not in the message
-    elif "status" in content:
-        total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
-        status_message = (
-            f"**__Current Status__**\n\n"
-            f"**Total Away:** {total_away}/{TOTAL_LIMIT}\n"
-            f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
-            f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
-            f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-        )
-        if total_away >= TOTAL_LIMIT:
-            status_message += "\n🚨 **__TOTAL LIMIT REACHED!__ NO MORE PEOPLE CAN BE AWAY!** 🚨"
-        await message.channel.send(status_message)
+    # No action on "status" command here, it will be handled by periodic update and queue changes
 
 # Function for periodic status updates every 30 minutes
 @tasks.loop(minutes=30)
 async def send_periodic_status():
+    await update_status_in_channel()
+
+# Function to send the current status to a designated channel
+async def update_status_in_channel():
     channel = bot.get_channel(1305118324547653692)  # Replace with the ID of the channel you want to send updates to
     total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
     status_message = (
-        f"**__Current Status (30-Minute Update)__**\n\n"
+        f"**__Current Status__**\n\n"
         f"**Total Away:** {total_away}/{TOTAL_LIMIT}\n"
         f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
         f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
