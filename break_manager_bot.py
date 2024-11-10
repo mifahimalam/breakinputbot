@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import re  # Import regex for time matching
 import os  # Importing the os library to access the token
 from keep_alive import keep_alive  # Import the keep_alive function from the keep_alive.py file
@@ -50,6 +50,7 @@ def format_queue(queue_name, queue_list, max_limit):
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+    send_periodic_status.start()  # Start periodic status updates when the bot is ready
 
 @bot.event
 async def on_message(message):
@@ -186,6 +187,22 @@ async def on_message(message):
         if total_away >= TOTAL_LIMIT:
             status_message += "\n🚨 **__TOTAL LIMIT REACHED!__ NO MORE PEOPLE CAN BE AWAY!** 🚨"
         await message.channel.send(status_message)
+
+# Function for periodic status updates every 30 minutes
+@tasks.loop(minutes=30)
+async def send_periodic_status():
+    channel = bot.get_channel(1305118324547653692)  # Replace with the ID of the channel you want to send updates to
+    total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
+    status_message = (
+        f"**__Current Status (30-Minute Update)__**\n\n"
+        f"**Total Away:** {total_away}/{TOTAL_LIMIT}\n"
+        f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+        f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+        f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+    )
+    if total_away >= TOTAL_LIMIT:
+        status_message += "\n🚨 **__TOTAL LIMIT REACHED!__ NO MORE PEOPLE CAN BE AWAY!** 🚨"
+    await channel.send(status_message)
 
 # Start the keep-alive function
 keep_alive()  # Call the keep_alive function to keep the bot alive
