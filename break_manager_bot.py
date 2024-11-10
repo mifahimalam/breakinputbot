@@ -89,8 +89,7 @@ async def on_message(message):
             removed = True
 
         if removed:
-            await update_status_in_channel()
-
+            await send_status_change(user, "back")
         else:
             await message.channel.send(f"{user}, you're not in any queue.")
         return  # Stop further processing to avoid triggering other commands like "break" or "offline"
@@ -106,7 +105,7 @@ async def on_message(message):
             if user in adhoc_queue:
                 adhoc_queue.remove(user)
             offline_queue.append(user)
-            await update_status_in_channel()
+            await send_status_change(user, "offline")
         else:
             await message.channel.send("Offline limit reached. Please wait for someone to return.")
 
@@ -120,10 +119,10 @@ async def on_message(message):
             if user in adhoc_queue:
                 adhoc_queue.remove(user)
             break_queue.append(user)
-            await update_status_in_channel()
+            await send_status_change(user, "break")
         elif can_take_break():
             break_queue.append(user)
-            await update_status_in_channel()
+            await send_status_change(user, "break")
         else:
             await message.channel.send("Break limit reached. Please wait for someone to return.")
 
@@ -137,14 +136,27 @@ async def on_message(message):
             if user in offline_queue:
                 offline_queue.remove(user)
             adhoc_queue.append(user)
-            await update_status_in_channel()
+            await send_status_change(user, "adhoc")
         elif can_take_adhoc():
             adhoc_queue.append(user)
-            await update_status_in_channel()
+            await send_status_change(user, "adhoc")
         else:
             await message.channel.send("Ad-hoc work limit reached. Please wait for someone to return.")
 
-    # No action on "status" command here, it will be handled by periodic update and queue changes
+# Function to send a status change message to the designated channel
+async def send_status_change(user, status):
+    channel = bot.get_channel(1283367634712137740)  # Replace with the ID of the channel you want to send updates to
+    if status == "back":
+        await channel.send(f"{user} is back to work!")
+    elif status == "break":
+        await channel.send(f"{user} is on break.")
+    elif status == "adhoc":
+        await channel.send(f"{user} is on ad-hoc work.")
+    elif status == "offline":
+        await channel.send(f"{user} is now offline.")
+    
+    # Trigger the status update in the designated channel after each queue change
+    await send_periodic_status()
 
 # Function for periodic status updates every 30 minutes
 @tasks.loop(minutes=30)
