@@ -53,6 +53,7 @@ def format_queue(queue_name, queue_list, max_limit):
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+    send_periodic_status.start()  # Start the periodic status update task after the bot is ready
 
 @bot.event
 async def on_message(message):
@@ -209,8 +210,11 @@ async def send_periodic_status():
 async def before_send_periodic_status():
     await bot.wait_until_ready()
 
-# Start the periodic status task
-send_periodic_status.start()
+# Start the periodic status task inside on_ready event
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user}')
+    send_periodic_status.start()
 
 # Keep the bot running
 keep_alive()
