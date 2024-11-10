@@ -184,7 +184,7 @@ async def on_message(message):
                          f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
                          f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
                          f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
-                         f"\nTotal people away from work: {total_away}/{TOTAL_LIMIT}"
+                         f"\nTotal people away from chat: {total_away}/{TOTAL_LIMIT}"
 
         status_channel = bot.get_channel(STATUS_CHANNEL_ID)
         if status_channel:
