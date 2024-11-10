@@ -23,8 +23,8 @@ MAX_ADHOC = 3
 MAX_OFFLINE = 3
 TOTAL_LIMIT = 5
 
-# Regex pattern to detect time mentions in the message (e.g., "at 6 PM", "in 10:30", etc.)
-time_pattern = re.compile(r"\b(at|in|around)?\s?(\d{1,2}[:.]\d{2}|\d{1,2}\s?[APap][Mm])\b", re.IGNORECASE)
+# Regex pattern to detect time mentions in the message
+time_pattern = re.compile(r"\b(will|at|in|around)?\s?(\d{1,2}[:.]\d{2})\b", re.IGNORECASE)
 
 # Set up the designated channel ID for status updates
 STATUS_CHANNEL_ID = 1305118324547653692  # Replace with your actual channel ID
@@ -63,19 +63,19 @@ async def on_message(message):
     content = message.content.lower()  # Convert message content to lowercase for case-insensitive matching
     user = message.author.display_name  # Use display name instead of username
 
-    # Check if the message contains a time-related request like "will take a break at 9:45"
-    match = time_pattern.search(content)
-    if match:
-        time_str = match.group(2)  # Extract the time part (e.g., 9:45, 6 PM)
-        time_slot = time_str.strip()  # Clean the time string (remove any spaces)
+    # Check if the message contains "break at 6 PM" or similar, and trigger break action
+    if "break" in content and "at" in content:
+        # Check for time-related request, e.g., "break at 6 PM"
+        match = time_pattern.search(content)
+        if match:
+            time_str = match.group(2)  # Extract the time part (e.g., 6 PM)
+            time_slot = time_str.strip()  # Clean the time string (remove any spaces)
 
-        # Store the time slot for the user
-        time_slots[user] = time_slot
+            # Store the time slot for the user
+            time_slots[user] = time_slot
 
-        await message.channel.send(f"Thank you {user}, your time of {time_slot} has been acknowledged. You have been added to the time schedule at that time.")
-
-        # Prevent further processing, don't allow break/adhoc/other queue triggers
-        return
+            await message.channel.send(f"Thank you {user}, your time of {time_slot} has been acknowledged. You have been added to the time schedule at that time.")
+            return  # Stop further processing, don't allow break/adhoc/other queue triggers for this user
 
     # Check if the message contains "back" or "did not" - prioritizing these keywords first
     if "back" in content or "did not" in content:
@@ -177,22 +177,34 @@ async def on_message(message):
         else:
             await message.channel.send("Ad-hoc work limit reached. Please wait for someone to return.")
 
-    else:
-        await message.channel.send(f"Sorry, {user}. I didn't understand your request.")
+    # Handle "status" command if "back" or "did not" was not in the message
+    elif "status" in content:
+        total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
+        status_message = f"**Current Status of Queues:**\n" \
+                         f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
+                         f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
+                         f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
+                         f"\nTotal people away from work: {total_away}/{TOTAL_LIMIT}"
 
-    await bot.process_commands(message)
+        status_channel = bot.get_channel(STATUS_CHANNEL_ID)
+        if status_channel:
+            await status_channel.send(status_message)
+        else:
+            await message.channel.send("Could not find the status channel.")
 
-# Periodic status update task
-@tasks.loop(minutes=5)
+# Periodic task to send status update every 10 minutes
+@tasks.loop(minutes=10)
 async def send_periodic_status():
-    channel = bot.get_channel(STATUS_CHANNEL_ID)
-    if channel:
-        await channel.send(
-            f"**Current Queue Status:**\n\n"
-            f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
-            f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
-            f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-        )
+    total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
+    status_message = f"**Current Status of Queues:**\n" \
+                     f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
+                     f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
+                     f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
+                     f"\nTotal people away from work: {total_away}/{TOTAL_LIMIT}"
+
+    status_channel = bot.get_channel(STATUS_CHANNEL_ID)
+    if status_channel:
+        await status_channel.send(status_message)
 
 # Start the bot
 keep_alive()
