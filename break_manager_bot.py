@@ -1,12 +1,14 @@
 import discord
 from discord.ext import commands, tasks
-import re
-import os
+import re  # Import regex for time matching
+import os  # Importing the os library to access the token
 from keep_alive import keep_alive  # Import the keep_alive function from the keep_alive.py file
 
+# Replace with your bot's token
 TOKEN = os.getenv("DISCORD_TOKEN")
+
 intents = discord.Intents.default()
-intents.message_content = True
+intents.message_content = True  # Enables reading message content
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -24,9 +26,8 @@ TOTAL_LIMIT = 5
 # Regex pattern to detect time mentions in the message
 time_pattern = re.compile(r"\b(will|at|in|around)?\s?(\d{1,2}[:.]\d{2})\b", re.IGNORECASE)
 
-# Set up the designated status channels (you need to provide the channel IDs)
-INPUT_CHANNEL_ID = 1283367634712137740  # Replace with your input channel ID (Channel A)
-STATUS_CHANNEL_ID = 1305118324547653692  # Replace with your status channel ID (Channel B)
+# Set up the designated channel ID for status updates
+STATUS_CHANNEL_ID = 1305118324547653692  # Replace with your actual channel ID
 
 # Functions to check if users can join the queues
 def can_take_break():
@@ -58,27 +59,26 @@ async def on_message(message):
     if message.author == bot.user:
         return  # Ignore messages from the bot itself
 
-    content = message.content.lower()
-    user = message.author.display_name
-
-    # Only respond to commands in the designated input channel (Channel A)
-    if message.channel.id != INPUT_CHANNEL_ID:
-        return
+    content = message.content.lower()  # Convert message content to lowercase for case-insensitive matching
+    user = message.author.display_name  # Use display name instead of username
 
     # Check if the message contains a time-related request like "will take a break at 9:45"
     match = time_pattern.search(content)
     if match:
-        time_str = match.group(2)
-        time_slot = time_str.strip()
+        time_str = match.group(2)  # Extract the time part (e.g., 9:45)
+        time_slot = time_str.strip()  # Clean the time string (remove any spaces)
 
         # Store the time slot for the user
         time_slots[user] = time_slot
 
         await message.channel.send(f"Thank you {user}, your time of {time_slot} has been acknowledged. You have been added to the time schedule at that time.")
+
+        # Prevent further processing, don't allow break/adhoc/other queue triggers
         return
 
-    # Check if the message contains "back" or "did not" (prioritize removing user from queues)
+    # Check if the message contains "back" or "did not" - prioritizing these keywords first
     if "back" in content or "did not" in content:
+        # Remove the user from all queues (break, adhoc, offline)
         removed = False
         if user in break_queue:
             break_queue.remove(user)
@@ -91,14 +91,18 @@ async def on_message(message):
             removed = True
 
         if removed:
-            # Send the update in the designated input channel (Channel A)
-            await message.channel.send(f"**{user} has been removed from all queues as they are back or did not take action.**")
-
+            await message.channel.send(
+                f"**{user} has been removed from all queues as they are back or did not take action.**\n\n"
+                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+            )
         else:
             await message.channel.send(f"{user}, you're not in any queue.")
-        return
 
-    # Commands handling
+        return  # Stop further processing to avoid triggering other commands like "break" or "offline"
+
+    # Check if the message contains other commands (e.g., break, offline, adhoc)
     if "offline" in content:
         if user in break_queue or user in adhoc_queue or user in offline_queue:
             await message.channel.send(f"{user}, you're already in one of the queues. Please leave the current queue before joining another.")
@@ -109,11 +113,12 @@ async def on_message(message):
             if user in adhoc_queue:
                 adhoc_queue.remove(user)
             offline_queue.append(user)
-            await message.channel.send(f"**{user} is now marked as offline.**")
-
-            # Send the update in the input channel (Channel A)
-            await message.channel.send(f"**{user} is now offline.**")
-            
+            await message.channel.send(
+                f"**{user} is now marked as offline.**\n\n"
+                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+            )
         else:
             await message.channel.send("Offline limit reached. Please wait for someone to return.")
 
@@ -127,10 +132,20 @@ async def on_message(message):
             if user in adhoc_queue:
                 adhoc_queue.remove(user)
             break_queue.append(user)
-            await message.channel.send(f"**{user} is now on break.**")
+            await message.channel.send(
+                f"**{user} is now on break.**\n\n"
+                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+            )
         elif can_take_break():
             break_queue.append(user)
-            await message.channel.send(f"**{user} is now on break.**")
+            await message.channel.send(
+                f"**{user} is now on break.**\n\n"
+                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+            )
         else:
             await message.channel.send("Break limit reached. Please wait for someone to return.")
 
@@ -144,32 +159,59 @@ async def on_message(message):
             if user in offline_queue:
                 offline_queue.remove(user)
             adhoc_queue.append(user)
-            await message.channel.send(f"**{user} is now on ad-hoc work.**")
+            await message.channel.send(
+                f"**{user} is now on ad-hoc work.**\n\n"
+                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+            )
         elif can_take_adhoc():
             adhoc_queue.append(user)
-            await message.channel.send(f"**{user} is now on ad-hoc work.**")
+            await message.channel.send(
+                f"**{user} is now on ad-hoc work.**\n\n"
+                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+            )
         else:
             await message.channel.send("Ad-hoc work limit reached. Please wait for someone to return.")
 
-# Task to send periodic updates in the designated status channel (Channel B) every 30 minutes
+    # Handle "status" command if "back" or "did not" was not in the message
+    elif "status" in content:
+        total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
+        status_message = f"**Current Status of Queues:**\n" \
+                         f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
+                         f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
+                         f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
+                         f"\nTotal people away from work: {total_away}/{TOTAL_LIMIT}"
+
+        status_channel = bot.get_channel(STATUS_CHANNEL_ID)
+        if status_channel:
+            await status_channel.send(status_message)
+
+    await bot.process_commands(message)
+
+# Background task to send periodic status updates
 @tasks.loop(minutes=30)
 async def send_periodic_status():
-    # Get the status channel (Channel B)
     status_channel = bot.get_channel(STATUS_CHANNEL_ID)
+    if status_channel:
+        total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
+        status_message = f"**Current Status of Queues (30 min update):**\n" \
+                         f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
+                         f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
+                         f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
+                         f"\nTotal people away from work: {total_away}/{TOTAL_LIMIT}"
 
-    status_message = f"**Current Queue Status**\n" \
-                     f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
-                     f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
-                     f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
-    
-    await status_channel.send(status_message)
+        await status_channel.send(status_message)
 
-# Start the periodic status updates when the bot is ready
-@bot.event
-async def on_ready():
-    send_periodic_status.start()
-    print(f'Logged in as {bot.user}')
+@send_periodic_status.before_loop
+async def before_send_periodic_status():
+    await bot.wait_until_ready()
 
-# Run the bot
+# Start the periodic status task
+send_periodic_status.start()
+
+# Keep the bot running
 keep_alive()
 bot.run(TOKEN)
