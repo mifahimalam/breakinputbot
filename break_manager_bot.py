@@ -25,8 +25,8 @@ TOTAL_LIMIT = 5
 time_pattern = re.compile(r"\b(will|at|in|around)?\s?(\d{1,2}[:.]\d{2})\b", re.IGNORECASE)
 
 # Set up the designated status channels (you need to provide the channel IDs)
-INPUT_CHANNEL_ID = 123456789012345678  # Replace with your input channel ID (Channel A)
-STATUS_CHANNEL_ID = 987654321098765432  # Replace with your status channel ID (Channel B)
+INPUT_CHANNEL_ID = 1283367634712137740  # Replace with your input channel ID (Channel A)
+STATUS_CHANNEL_ID = 1305118324547653692  # Replace with your status channel ID (Channel B)
 
 # Functions to check if users can join the queues
 def can_take_break():
