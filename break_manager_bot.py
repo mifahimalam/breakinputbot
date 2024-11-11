@@ -23,8 +23,9 @@ MAX_ADHOC = 3
 MAX_OFFLINE = 3
 TOTAL_LIMIT = 5
 
-# Regex pattern to detect time mentions in the message
-time_pattern = re.compile(r"\b(will|at|in|around|@)?\s?(\d{1,2}[:.]\d{2})\b", re.IGNORECASE)
+# Regex pattern to detect flexible time mentions in the message
+time_pattern = re.compile(
+    r"\b(?:will|at|in|around|@)?\s?(\d{1,2}[:.](?::\d{2})?\s?(?:am|pm|AM|PM)?)\b", re.IGNORECASE)
 
 # Set up the designated channel ID for status updates
 STATUS_CHANNEL_ID = 1305118324547653692  # Replace with your actual channel ID
@@ -63,12 +64,11 @@ async def on_message(message):
     content = message.content.lower()  # Convert message content to lowercase for case-insensitive matching
     user = message.author.display_name  # Use display name instead of username
 
-    # Check if the message contains "break at 6 PM" or similar, and trigger break action
-    if "break" in content and "@" in content:
-        # Check for time-related request, e.g., "break at 6 PM"
+    # Check for time-related request, e.g., "at 6 PM"
+    if "at" in content:
         match = time_pattern.search(content)
         if match:
-            time_str = match.group(2)  # Extract the time part (e.g., 6 PM)
+            time_str = match.group(1)  # Extract the time part (e.g., "6 PM" or "18:30")
             time_slot = time_str.strip()  # Clean the time string (remove any spaces)
 
             # Store the time slot for the user
@@ -187,25 +187,7 @@ async def on_message(message):
                          f"\nTotal people away from chat: {total_away}/{TOTAL_LIMIT}"
 
         status_channel = bot.get_channel(STATUS_CHANNEL_ID)
-        if status_channel:
-            await status_channel.send(status_message)
-        else:
-            await message.channel.send("Could not find the status channel.")
-
-# Periodic task to send status update every 30 minutes
-@tasks.loop(minutes=60)
-async def send_periodic_status():
-    total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
-    status_message = f"**Current Status of Queues:**\n" \
-                     f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
-                     f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
-                     f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
-                     f"\nTotal people away from chat: {total_away}/{TOTAL_LIMIT}"
-
-    status_channel = bot.get_channel(STATUS_CHANNEL_ID)
-    if status_channel:
         await status_channel.send(status_message)
 
-# Start the bot
 keep_alive()
 bot.run(TOKEN)
