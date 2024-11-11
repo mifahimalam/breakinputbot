@@ -18,6 +18,8 @@ break_queue = []
 adhoc_queue = []
 offline_queue = []
 time_slots = {}  # Dictionary to store time slots for users
+proposed_break_queue = []  # New queue for proposed breaks
+proposed_time_slots = {}  # Dictionary to store time slots for proposed breaks
 
 MAX_BREAK = 3
 MAX_ADHOC = 3
@@ -51,6 +53,13 @@ def format_queue(queue_name, queue_list, max_limit):
         queue_status += f"\n🚨 **__{queue_name.upper()} LIMIT REACHED!__** 🚨\n"
     return queue_status
 
+def format_proposed_break_queue():
+    """Format the Proposed Break Queue list."""
+    proposed_break_text = "\n".join(
+        [f"- {user} at {proposed_time_slots[user]}" for user in proposed_break_queue]
+    ) or "*None*"
+    return f"**__Proposed Break Queue__**\n{proposed_break_text}\n"
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
@@ -75,11 +84,15 @@ async def on_message(message):
 
             time_slot = f"{hour}{minute} {period}".strip()  # Format time string
 
-            # Store the time slot for the user
-            time_slots[user] = time_slot
+            # Store the time slot for the user in the proposed break queue
+            proposed_break_queue.append(user)
+            proposed_time_slots[user] = time_slot
 
-            await message.channel.send(f"Thank you {user}, your time of {time_slot} has been acknowledged. You have been added to the time schedule at that time.")
-            return  # Stop further processing, don't allow break/adhoc/other queue triggers for this user
+            await message.channel.send(
+                f"Thank you {user}, your proposed break time of {time_slot} has been recorded. "
+                f"You have been added to the Proposed Break Queue."
+            )
+            return  # Stop further processing to avoid triggering other commands
 
     # Check if the message contains "back" or "did not" - prioritizing these keywords first
     if "back" in content or "did not" in content:
@@ -98,6 +111,7 @@ async def on_message(message):
         if removed:
             await message.channel.send(
                 f"**{user} has been removed from all queues as they are back or did not take action.**\n\n"
+                f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
                 f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
@@ -120,6 +134,7 @@ async def on_message(message):
             offline_queue.append(user)
             await message.channel.send(
                 f"**{user} is now marked as offline.**\n\n"
+                f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
                 f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
@@ -139,6 +154,7 @@ async def on_message(message):
             break_queue.append(user)
             await message.channel.send(
                 f"**{user} is now on break.**\n\n"
+                f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
                 f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
@@ -147,6 +163,7 @@ async def on_message(message):
             break_queue.append(user)
             await message.channel.send(
                 f"**{user} is now on break.**\n\n"
+                f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
                 f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
@@ -166,6 +183,7 @@ async def on_message(message):
             adhoc_queue.append(user)
             await message.channel.send(
                 f"**{user} is now on ad-hoc work.**\n\n"
+                f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
                 f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
@@ -174,6 +192,7 @@ async def on_message(message):
             adhoc_queue.append(user)
             await message.channel.send(
                 f"**{user} is now on ad-hoc work.**\n\n"
+                f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
                 f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
@@ -184,7 +203,7 @@ async def on_message(message):
     # Handle "status" command if "back" or "did not" was not in the message
     elif "status" in content:
         total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
-        status_message = f"**Current Status of Queues:**\n" \
+        status_message = f"{format_proposed_break_queue()}" \
                          f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
                          f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
                          f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
@@ -207,6 +226,7 @@ async def send_periodic_status():
 
         total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
         status_message = f"**Periodic Status Update:**\n" \
+                         f"{format_proposed_break_queue()}" \
                          f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
                          f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
                          f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
