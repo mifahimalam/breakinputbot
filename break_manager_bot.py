@@ -24,7 +24,7 @@ MAX_OFFLINE = 3
 TOTAL_LIMIT = 5
 
 # Regex pattern to detect time mentions in the message
-time_pattern = re.compile(r"\b(will|at|in|around)?\s?(\d{1,2}[:.]\d{2})\b", re.IGNORECASE)
+time_pattern = re.compile(r"\b(will|at|in|around|@)?\s?(\d{1,2}[:.]\d{2})\b", re.IGNORECASE)
 
 # Set up the designated channel ID for status updates
 STATUS_CHANNEL_ID = 1305118324547653692  # Replace with your actual channel ID
@@ -64,7 +64,7 @@ async def on_message(message):
     user = message.author.display_name  # Use display name instead of username
 
     # Check if the message contains "break at 6 PM" or similar, and trigger break action
-    if "at" in content:
+    if "break" in content and "@" in content:
         # Check for time-related request, e.g., "break at 6 PM"
         match = time_pattern.search(content)
         if match:
