@@ -3,6 +3,7 @@ from discord.ext import commands, tasks
 import re  # Import regex for time matching
 import os  # Importing the os library to access the token
 from keep_alive import keep_alive  # Import the keep_alive function from the keep_alive.py file
+from datetime import datetime, time, timedelta
 
 # Replace with your bot's token
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -23,9 +24,8 @@ MAX_ADHOC = 3
 MAX_OFFLINE = 3
 TOTAL_LIMIT = 5
 
-# Regex pattern to detect flexible time mentions in the message
-time_pattern = re.compile(
-    r"\b(?:will|at|in|around|@)?\s?(\d{1,2}[:.](?::\d{2})?\s?(?:am|pm|AM|PM)?)\b", re.IGNORECASE)
+# Regex pattern to detect time mentions in various formats (e.g., "at 6:00 PM" or "around 14:30")
+time_pattern = re.compile(r"\b(?:will|at|in|around|@)?\s?(\d{1,2})([:.]\d{2})?\s?(AM|PM|am|pm)?\b", re.IGNORECASE)
 
 # Set up the designated channel ID for status updates
 STATUS_CHANNEL_ID = 1305118324547653692  # Replace with your actual channel ID
@@ -64,12 +64,16 @@ async def on_message(message):
     content = message.content.lower()  # Convert message content to lowercase for case-insensitive matching
     user = message.author.display_name  # Use display name instead of username
 
-    # Check for time-related request, e.g., "at 6 PM"
+    # Check if the message contains "break at 6 PM" or similar, and trigger break action
     if "at" in content:
+        # Check for time-related request, e.g., "break at 6 PM"
         match = time_pattern.search(content)
         if match:
-            time_str = match.group(1)  # Extract the time part (e.g., "6 PM" or "18:30")
-            time_slot = time_str.strip()  # Clean the time string (remove any spaces)
+            hour = match.group(1)
+            minute = match.group(2) if match.group(2) else ":00"  # Default to :00 if no minute is given
+            period = match.group(3).upper() if match.group(3) else ""
+
+            time_slot = f"{hour}{minute} {period}".strip()  # Format time string
 
             # Store the time slot for the user
             time_slots[user] = time_slot
@@ -184,10 +188,32 @@ async def on_message(message):
                          f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
                          f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
                          f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
-                         f"\nTotal people away from chat: {total_away}/{TOTAL_LIMIT}"
+                         f"\n**Total Away from Original Work: {total_away}/{TOTAL_LIMIT}**"
+        await message.channel.send(status_message)
 
-        status_channel = bot.get_channel(STATUS_CHANNEL_ID)
-        await status_channel.send(status_message)
+@tasks.loop(minutes=60)  # Task runs every 60 minutes
+async def send_periodic_status():
+    # Get current time in GMT+6
+    now = datetime.utcnow() + timedelta(hours=6)
+    start_time = time(13, 15)  # 1:15 PM
+    end_time = time(21, 45)    # 9:45 PM
 
+    # Check if current time is within the desired time range
+    if start_time <= now.time() <= end_time:
+        channel = bot.get_channel(STATUS_CHANNEL_ID)
+        if channel is None:
+            print("Status channel not found.")
+            return
+
+        total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
+        status_message = f"**Periodic Status Update:**\n" \
+                         f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
+                         f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
+                         f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
+                         f"\n**Total Away from Original Work: {total_away}/{TOTAL_LIMIT}**"
+
+        await channel.send(status_message)
+
+# Start the bot
 keep_alive()
 bot.run(TOKEN)
