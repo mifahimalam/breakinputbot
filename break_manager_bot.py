@@ -64,7 +64,7 @@ async def on_message(message):
     user = message.author.display_name  # Use display name instead of username
 
     # Check if the message contains "break at 6 PM" or similar, and trigger break action
-    if "break" in content and "at" in content:
+    if "at" in content:
         # Check for time-related request, e.g., "break at 6 PM"
         match = time_pattern.search(content)
         if match:
