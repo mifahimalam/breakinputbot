@@ -113,7 +113,7 @@ async def on_message(message):
 
         if removed:
             await message.channel.send(
-                f"**Our bro, {user} is now back and will be on Chat Support!!! Hip, hip, hurray!!!**\n\n"
+                f"**Our bro, {user} is now back and will do whatever they were doing before!!! Hip, hip, hurray!!!**\n\n"
                 f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
