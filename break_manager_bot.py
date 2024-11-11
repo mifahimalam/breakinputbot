@@ -193,7 +193,7 @@ async def on_message(message):
             await message.channel.send("Could not find the status channel.")
 
 # Periodic task to send status update every 30 minutes
-@tasks.loop(minutes=30)
+@tasks.loop(minutes=60)
 async def send_periodic_status():
     total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
     status_message = f"**Current Status of Queues:**\n" \
