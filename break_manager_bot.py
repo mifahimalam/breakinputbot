@@ -187,8 +187,6 @@ async def on_message(message):
                 break_queue.remove(user)
             if user in offline_queue:
                 offline_queue.remove(user)
-            if user in proposed_break_queue:
-                proposed_break_queue.remove(user)
             adhoc_queue.append(user)
             await message.channel.send(
                 f"**{user} bro is now on ad-hoc work. 😢 Rest of us, keep working!!!**\n\n"
