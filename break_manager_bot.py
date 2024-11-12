@@ -95,7 +95,7 @@ async def on_message(message):
             return  # Stop further processing to avoid triggering other commands
 
     # Check if the message contains "back" or "did not" - prioritizing these keywords first
-    if "back" in content or "did not" in content:
+    if "back" in content or "did not" in content or "online" in content:
         # Remove the user from all queues (break, adhoc, offline)
         removed = False
         if user in break_queue:
