@@ -1,3 +1,4 @@
+
 import discord
 from discord.ext import commands, tasks
 import re
@@ -59,7 +60,8 @@ def log_to_sheet(sheet, username, display_name, action_time, action_type):
                 sheet.update_cell(idx + 1, 4, action_time)  # Update end time in column D
                 return
     # If no matching row found or it's a start action, append a new row
-    sheet.append_row([username, display_name, action_time if action_type == "start" else "", action_time if action_type == "end" else ""])
+    if action_type == "start":
+        sheet.append_row([username, display_name, action_time, ""])
 
 def record_offline(username, display_name, action_type):
     """Record the user going offline or coming back online."""
