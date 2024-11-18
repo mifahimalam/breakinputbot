@@ -137,19 +137,19 @@ async def on_message(message):
 
             if user in proposed_time_slots and proposed_time_slots[user] == time_slot:
                 await message.channel.send(
-                    f"{user}, you've already proposed this break time ({time_slot}). No changes made."
+                    f"{display_name}, you've already proposed this break time ({time_slot}). No changes made."
                 )
             elif user in proposed_time_slots:
                 previous_time = proposed_time_slots[user]
                 proposed_time_slots[user] = time_slot
                 await message.channel.send(
-                    f"{user}, your break time has been updated from {previous_time} to {time_slot}."
+                    f"{display_name}, your break time has been updated from {previous_time} to {time_slot}."
                 )
             else:
                 proposed_break_queue.append(user)
                 proposed_time_slots[user] = time_slot
                 await message.channel.send(
-                    f"{user}, your proposed break time ({time_slot}) has been recorded."
+                    f"{display_name}, your proposed break time ({time_slot}) has been recorded."
                 )
             return
 
