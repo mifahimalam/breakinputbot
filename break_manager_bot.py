@@ -51,19 +51,25 @@ time_pattern = re.compile(r"\b(?:will|at|in|around|@)?\s?(\d{1,2})([:.]\d{2})?\s
 STATUS_CHANNEL_ID = 1305118324547653692  # Replace with your actual channel ID
 
 # Functions to log data in Google Sheets
-def log_to_sheet(sheet, username, action_time):
+def log_to_sheet(sheet, username, display_name, action_time, action_type):
     """Log user action to Google Sheets."""
-    sheet.append_row([username, action_time])
+    row = sheet.find(username, in_column=1)
+    if row and action_type == "start":
+        sheet.update_cell(row.row, 2, action_time)  # Update start time
+    elif row and action_type == "end":
+        sheet.update_cell(row.row, 3, action_time)  # Update end time
+    else:
+        sheet.append_row([username, display_name, action_time, "", ""])  # New row for start time
 
-def record_offline(user):
-    """Record the user going offline."""
+def record_offline(user, display_name, action_type):
+    """Record the user going offline or coming back online."""
     action_time = (datetime.utcnow() + timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
-    log_to_sheet(offline_sheet, user, action_time)
+    log_to_sheet(offline_sheet, user, display_name, action_time, action_type)
 
-def record_break(user):
-    """Record the user going on break."""
+def record_break(user, display_name, action_type):
+    """Record the user going on break or coming back from break."""
     action_time = (datetime.utcnow() + timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
-    log_to_sheet(break_sheet, user, action_time)
+    log_to_sheet(break_sheet, user, display_name, action_time, action_type)
 
 # Functions for queue management
 def can_take_break():
@@ -76,7 +82,7 @@ def can_go_offline():
     return len(offline_queue) < MAX_OFFLINE and (len(break_queue) + len(adhoc_queue) + len(offline_queue)) < TOTAL_LIMIT
 
 def format_queue(queue_name, queue_list, max_limit):
-    queue_text = "\n".join([f"- {user}" for user in queue_list]) or "*None*"
+    queue_text = "\n".join([f"- {user[1]}" for user in queue_list]) or "*None*"
     queue_count = len(queue_list)
     queue_status = f"**__{queue_name} ({queue_count}/{max_limit})__**\n{queue_text}\n"
     if queue_count >= max_limit:
@@ -85,7 +91,7 @@ def format_queue(queue_name, queue_list, max_limit):
 
 def format_proposed_break_queue():
     proposed_break_text = "\n".join(
-        [f"- {user} at {proposed_time_slots[user]}" for user in proposed_break_queue]
+        [f"- {user[1]} at {proposed_time_slots[user[0]]}" for user in proposed_break_queue]
     ) or "*None*"
     return f"**__Proposed Break Queue__**\n{proposed_break_text}\n"
 
@@ -100,7 +106,9 @@ async def on_message(message):
         return
 
     content = message.content.lower()
-    user = message.author.display_name
+    username = str(message.author)
+    display_name = message.author.display_name
+    user = (username, display_name)
 
     # Handle proposed break queue
     if "at" in content:
@@ -111,35 +119,38 @@ async def on_message(message):
             period = match.group(3).upper() if match.group(3) else ""
             time_slot = f"{hour}{minute} {period}".strip()
 
-            if user in proposed_time_slots and proposed_time_slots[user] == time_slot:
+            if username in proposed_time_slots and proposed_time_slots[username] == time_slot:
                 await message.channel.send(
-                    f"{user}, you've already proposed this break time ({time_slot}). No changes made."
+                    f"{display_name}, you've already proposed this break time ({time_slot}). No changes made."
                 )
-            elif user in proposed_time_slots:
-                previous_time = proposed_time_slots[user]
-                proposed_time_slots[user] = time_slot
+            elif username in proposed_time_slots:
+                previous_time = proposed_time_slots[username]
+                proposed_time_slots[username] = time_slot
                 await message.channel.send(
-                    f"{user}, your break time has been updated from {previous_time} to {time_slot}."
+                    f"{display_name}, your break time has been updated from {previous_time} to {time_slot}."
                 )
             else:
                 proposed_break_queue.append(user)
-                proposed_time_slots[user] = time_slot
+                proposed_time_slots[username] = time_slot
                 await message.channel.send(
-                    f"{user}, your proposed break time ({time_slot}) has been recorded."
+                    f"{display_name}, your proposed break time ({time_slot}) has been recorded."
                 )
             return
+
     # Check if the message contains "back" or "did not" - prioritizing these keywords first
     if "back" in content or "did not" in content or "online" in content:
         # Remove the user from all queues (break, adhoc, offline)
         removed = False
         if user in break_queue:
             break_queue.remove(user)
+            record_break(username, display_name, "end")
             removed = True
         if user in adhoc_queue:
             adhoc_queue.remove(user)
             removed = True
         if user in offline_queue:
             offline_queue.remove(user)
+            record_offline(username, display_name, "end")
             removed = True
         if user in proposed_break_queue:
             proposed_break_queue.remove(user)
@@ -147,26 +158,26 @@ async def on_message(message):
 
         if removed:
             await message.channel.send(
-                f"**{user} is now back to their original work.**\n\n"
+                f"**{display_name} is now back to their original work.**\n\n"
                 f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
                 f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
             )
         else:
-            await message.channel.send(f"{user}, you're not in any queue.")
+            await message.channel.send(f"{display_name}, you're not in any queue.")
 
-            return  # Stop further processing to avoid triggering other commands like "break" or "offline"
+        return  # Stop further processing to avoid triggering other commands like "break" or "offline"
 
     # Handle offline queue
     if "offline" in content:
         if user in offline_queue:
-            await message.channel.send(f"{user}, you're already marked as offline.")
+            await message.channel.send(f"{display_name}, you're already marked as offline.")
         elif can_go_offline():
             offline_queue.append(user)
-            record_offline(user)
+            record_offline(username, display_name, "start")
             await message.channel.send(
-                f"{user} is now offline.\n\n"
+                f"{display_name} is now offline.\n\n"
                 f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
@@ -178,12 +189,12 @@ async def on_message(message):
     # Handle break queue
     elif "break" in content:
         if user in break_queue:
-            await message.channel.send(f"{user}, you're already on break.")
+            await message.channel.send(f"{display_name}, you're already on break.")
         elif can_take_break():
             break_queue.append(user)
-            record_break(user)
+            record_break(username, display_name, "start")
             await message.channel.send(
-                f"{user} is now on break.\n\n"
+                f"{display_name} is now on break.\n\n"
                 f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
@@ -192,19 +203,21 @@ async def on_message(message):
         else:
             await message.channel.send("Break limit reached. Please wait for someone to return.")
             
-    # Handle break queue
+    # Handle adhoc queue
     elif "adhoc" in content:
         if user in adhoc_queue:
-            await message.channel.send(f"{user}, you're already on ad-hoc work!")
+            await message.channel.send(f"{display_name}, you're already on ad-hoc work!")
         elif user in break_queue or user in offline_queue:
             # Remove user from all other queues if they're in one
             if user in break_queue:
                 break_queue.remove(user)
+                record_break(username, display_name, "end")
             if user in offline_queue:
                 offline_queue.remove(user)
+                record_offline(username, display_name, "end")
             adhoc_queue.append(user)
             await message.channel.send(
-                f"**{user} is now on ad-hoc work.**\n\n"
+                f"**{display_name} is now on ad-hoc work.**\n\n"
                 f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
@@ -213,7 +226,7 @@ async def on_message(message):
         elif can_take_adhoc():
             adhoc_queue.append(user)
             await message.channel.send(
-                f"**{user} is now on ad-hoc work.**\n\n"
+                f"**{display_name} is now on ad-hoc work.**\n\n"
                 f"{format_proposed_break_queue()}"
                 f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
                 f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
