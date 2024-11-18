@@ -54,22 +54,22 @@ def log_to_sheet(sheet, username, display_name, action_time, action_type):
     """Log user action to Google Sheets."""
     rows = sheet.get_all_values()
     for idx, row in enumerate(rows):
-        if row[0] == username and row[2] and not row[3]:  # If start time exists but end time doesn't
+        if len(row) >= 4 and row[0] == username and row[2] and not row[3]:  # If start time exists but end time doesn't
             if action_type == "end":
-                sheet.update_cell(idx + 1, 4, action_time)  # Update end time
+                sheet.update_cell(idx + 1, 4, action_time)  # Update end time in column D
                 return
     # If no matching row found or it's a start action, append a new row
     sheet.append_row([username, display_name, action_time if action_type == "start" else "", action_time if action_type == "end" else ""])
 
-def record_offline(user, display_name, action_type):
+def record_offline(username, display_name, action_type):
     """Record the user going offline or coming back online."""
     action_time = (datetime.utcnow() + timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
-    log_to_sheet(offline_sheet, user, display_name, action_time, action_type)
+    log_to_sheet(offline_sheet, username, display_name, action_time, action_type)
 
-def record_break(user, display_name, action_type):
+def record_break(username, display_name, action_type):
     """Record the user going on break or coming back from break."""
     action_time = (datetime.utcnow() + timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
-    log_to_sheet(break_sheet, user, display_name, action_time, action_type)
+    log_to_sheet(break_sheet, username, display_name, action_time, action_type)
 
 def remove_from_all_queues(user):
     """Remove user from all queues and record end times if necessary."""
@@ -151,7 +151,6 @@ async def on_message(message):
                     f"{user}, your proposed break time ({time_slot}) has been recorded."
                 )
             return
-
 
     # Check if the message contains "back" or "did not" - prioritizing these keywords first
     if "back" in content or "did not" in content or "online" in content:
