@@ -51,28 +51,32 @@ STATUS_CHANNEL_ID = 1305118324547653692  # Replace with your actual channel ID
 
 # Functions to log data in Google Sheets
 def log_to_sheet(sheet, username, display_name, action_time, action_type):
-    """Log user action to Google Sheets."""
-    rows = sheet.get_all_values()
-    user_rows = [idx for idx, row in enumerate(rows) if row[0] == username]
-    
-    if action_type == "start":
-        if user_rows:
-            last_user_row = user_rows[-1]
-            if not rows[last_user_row][3]:  # If end time is empty
-                sheet.update_cell(last_user_row + 1, 3, action_time)  # Update start time
+    try:
+        rows = sheet.get_all_values()
+        user_rows = [idx for idx, row in enumerate(rows) if row and row[0] == username]
+        
+        if action_type == "start":
+            if user_rows:
+                last_user_row = user_rows[-1]
+                if len(rows[last_user_row]) < 4 or not rows[last_user_row][3]:  # If end time is empty
+                    sheet.update_cell(last_user_row + 1, 3, action_time)  # Update start time
+                else:
+                    sheet.append_row([username, display_name, action_time, ""])  # Add new row
             else:
                 sheet.append_row([username, display_name, action_time, ""])  # Add new row
-        else:
-            sheet.append_row([username, display_name, action_time, ""])  # Add new row
-    elif action_type == "end":
-        if user_rows:
-            last_user_row = user_rows[-1]
-            if rows[last_user_row][2] and not rows[last_user_row][3]:  # If start time exists and end time is empty
-                sheet.update_cell(last_user_row + 1, 4, action_time)  # Update end time
+        elif action_type == "end":
+            if user_rows:
+                last_user_row = user_rows[-1]
+                if len(rows[last_user_row]) >= 3 and rows[last_user_row][2] and (len(rows[last_user_row]) < 4 or not rows[last_user_row][3]):  # If start time exists and end time is empty
+                    sheet.update_cell(last_user_row + 1, 4, action_time)  # Update end time
+                else:
+                    print(f"Warning: Couldn't find an open session for {username} to end.")
             else:
-                print(f"Warning: Couldn't find an open session for {username} to end.")
-        else:
-            print(f"Warning: No records found for {username} to end their session.")
+                print(f"Warning: No records found for {username} to end their session.")
+        
+        print(f"Successfully logged {action_type} action for {username} at {action_time}")
+    except Exception as e:
+        print(f"Error logging to sheet: {str(e)}")
 
 def record_offline(username, display_name, action_type):
     """Record the user going offline or coming back online."""
