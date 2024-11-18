@@ -1,3 +1,5 @@
 discord.py
 python-dotenv
 flask
+gspread
+oauth2client
