@@ -128,6 +128,35 @@ async def on_message(message):
                     f"{user}, your proposed break time ({time_slot}) has been recorded."
                 )
             return
+    # Check if the message contains "back" or "did not" - prioritizing these keywords first
+    if "back" in content or "did not" in content or "online" in content:
+        # Remove the user from all queues (break, adhoc, offline)
+        removed = False
+        if user in break_queue:
+            break_queue.remove(user)
+            removed = True
+        if user in adhoc_queue:
+            adhoc_queue.remove(user)
+            removed = True
+        if user in offline_queue:
+            offline_queue.remove(user)
+            removed = True
+        if user in proposed_break_queue:
+            proposed_break_queue.remove(user)
+            removed = True
+
+        if removed:
+            await message.channel.send(
+                f"**{user} is now back to their original work.**\n\n"
+                f"{format_proposed_break_queue()}"
+                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+            )
+        else:
+            await message.channel.send(f"{user}, you're not in any queue.")
+
+            return  # Stop further processing to avoid triggering other commands like "break" or "offline"
 
     # Handle offline queue
     if "offline" in content:
@@ -162,6 +191,46 @@ async def on_message(message):
             )
         else:
             await message.channel.send("Break limit reached. Please wait for someone to return.")
+            
+    # Handle break queue
+    elif "adhoc" in content:
+        if user in adhoc_queue:
+            await message.channel.send(f"{user} bro, you're already on ad-hoc work! Chill! 😆")
+        elif user in break_queue or user in offline_queue:
+            # Remove user from all other queues if they're in one
+            if user in break_queue:
+                break_queue.remove(user)
+            if user in offline_queue:
+                offline_queue.remove(user)
+            adhoc_queue.append(user)
+            await message.channel.send(
+                f"**{user} bro is now on ad-hoc work. 😢 Rest of us, keep working!!!**\n\n"
+                f"{format_proposed_break_queue()}"
+                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+            )
+        elif can_take_adhoc():
+            adhoc_queue.append(user)
+            await message.channel.send(
+                f"**{user} bro is now on ad-hoc work. 😢 Rest of us, keep working!!!**\n\n"
+                f"{format_proposed_break_queue()}"
+                f"{format_queue('Break Queue', break_queue, MAX_BREAK)}"
+                f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}"
+                f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}"
+            )
+        else:
+            await message.channel.send("My bro! Ad-hoc work limit reached. 😭 Please do your ad-hoc after someone is done with theirs.")
+
+    # Handle "status" command if "back" or "did not" was not in the message
+    elif "status" in content:
+        total_away = len(break_queue) + len(adhoc_queue) + len(offline_queue)
+        status_message = f"{format_proposed_break_queue()}" \
+                         f"{format_queue('Break Queue', break_queue, MAX_BREAK)}" \
+                         f"{format_queue('Ad-hoc Queue', adhoc_queue, MAX_ADHOC)}" \
+                         f"{format_queue('Offline Agents', offline_queue, MAX_OFFLINE)}" \
+                         f"\n**Total Away from chat: {total_away}/{TOTAL_LIMIT}**"
+        await message.channel.send(status_message)
 
 @tasks.loop(minutes=30)
 async def send_periodic_status():
