@@ -1,4 +1,3 @@
-
 import discord
 from discord.ext import commands, tasks
 import re
@@ -55,10 +54,15 @@ def log_to_sheet(sheet, username, display_name, action_time, action_type):
     """Log user action to Google Sheets."""
     rows = sheet.get_all_values()
     for idx, row in enumerate(rows):
-        if len(row) >= 4 and row[0] == username and row[2] and not row[3]:  # If start time exists but end time doesn't
-            if action_type == "end":
+        if len(row) >= 4 and row[0] == username:
+            if action_type == "start" and not row[2]:
+                sheet.update_cell(idx + 1, 3, action_time)  # Update start time in column C
+                return
+            elif action_type == "end" and row[2] and not row[3]:
                 sheet.update_cell(idx + 1, 4, action_time)  # Update end time in column D
-    # If no matching row found or it's a start action, append a new row
+                return
+    
+    # If no matching row found or it's a new start action, append a new row
     if action_type == "start":
         sheet.append_row([username, display_name, action_time, ""])
 
