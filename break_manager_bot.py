@@ -58,7 +58,6 @@ def log_to_sheet(sheet, username, display_name, action_time, action_type):
         if len(row) >= 4 and row[0] == username and row[2] and not row[3]:  # If start time exists but end time doesn't
             if action_type == "end":
                 sheet.update_cell(idx + 1, 4, action_time)  # Update end time in column D
-                return
     # If no matching row found or it's a start action, append a new row
     if action_type == "start":
         sheet.append_row([username, display_name, action_time, ""])
